@@ -18,8 +18,8 @@ HEADERS += \
 FORMS += \
     mainwindow.ui
 
-TRANSLATIONS += \
-    TestPort_hu_HU.ts
+#TRANSLATIONS += \
+#    TestPort_hu_HU.ts
 CONFIG += lrelease
 CONFIG += embed_translations
 

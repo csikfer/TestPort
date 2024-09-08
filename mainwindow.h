@@ -1,6 +1,8 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "qtreewidget.h"
+#include "ui_mainwindow.h"
 #include <QMainWindow>
 #include <QThread>
 #include <QtNetwork/QtNetwork>
@@ -29,8 +31,21 @@ public:
     cTester(MainWindow * _mw);
 private:
     void run() override;
+public:
     MainWindow *pMainWindow;
 };
 
+class cInterface : public QObject, QNetworkInterface {
+public:
+    cTester * pParent;
+    QTreeWidget * pTreeWidget;
+    cInterface(const QNetworkInterface& i, cTester* par);
+    void getParams();
+
+    QTreeWidgetItem *pTopItem;
+    static QList<cInterface *>  interfaces;
+    QList<QNetworkAddressEntry> addresses;
+    QList<QTreeWidgetItem *>    addressItems;
+};
 
 #endif // MAINWINDOW_H
