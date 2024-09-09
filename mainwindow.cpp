@@ -137,25 +137,23 @@ void cInterface::getParams() {
             addressItems.last()->addChild(new QTreeWidgetItem(row));
         }
 
-        row.clear();
-        row << "Route";
-        QTreeWidgetItem *pRouteItem = new QTreeWidgetItem(row);
-        addressItems.last()->addChild(pRouteItem);
-
-        static QString _Iface       = "Iface";
-        static QString _Destination = "Destination";
-        static QString _Gateway     = "Gateway";
-        static QString _Metric      = "Metric";
-        static QString _Mask        = "Mask";
-        for (int i = 0; i < routerTable.value(_Iface).size(); ++i) {
-            if (routerTable[_Iface][i] == ifname) {
-                row.clear();
-                row << hex2ipm(routerTable[_Destination][i], routerTable[_Mask][i])
-                    << hex2ip(routerTable[_Gateway][i])
-                    << routerTable[_Metric][i];
-                pRouteItem->addChild(new QTreeWidgetItem(row));
-            }
+    }
+    row.clear();
+    row << "Route";
+    QTreeWidgetItem *pRouteItem = new QTreeWidgetItem(row);
+    pTopItem->addChild(pRouteItem);
+    static QString _Iface       = "Iface";
+    static QString _Destination = "Destination";
+    static QString _Gateway     = "Gateway";
+    static QString _Metric      = "Metric";
+    static QString _Mask        = "Mask";
+    for (int i = 0; i < routerTable.value(_Iface).size(); ++i) {
+        if (routerTable[_Iface][i] == ifname) {
+            row.clear();
+            row << hex2ipm(routerTable[_Destination][i], routerTable[_Mask][i])
+                << hex2ip(routerTable[_Gateway][i])
+                << routerTable[_Metric][i];
+            pRouteItem->addChild(new QTreeWidgetItem(row));
         }
-
     }
 }
