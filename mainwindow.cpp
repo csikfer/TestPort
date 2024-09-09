@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include "proc_fs.h"
 
 static QString IfaceType2str(QNetworkInterface::InterfaceType _t)
 {
@@ -66,8 +67,15 @@ cTester::cTester(MainWindow *_mw)
     ;
 }
 
+cTabFromProc routerTable;
+
 void cTester::run()
 {
+    pMainWindow->ui->statusbar->showMessage(tr("router tábla"));
+    if (!routerTable.load("/proc/net/route")) {
+        pMainWindow->ui->statusbar->showMessage(tr("A router tábla beolvasása sikertelen"));
+        return;
+    }
     pMainWindow->ui->statusbar->showMessage(tr("Inrfész lista"));
     QList<QNetworkInterface> ifs = QNetworkInterface::allInterfaces();
     for (int ix = 0; ix < ifs.size(); ++ix) {
@@ -93,7 +101,8 @@ cInterface::cInterface(const QNetworkInterface& i, cTester* par)
 void cInterface::getParams() {
 
     QStringList row;
-    row << humanReadableName() << IfaceType2str(type()) << IfaceState2str(flags());
+    QString ifname = humanReadableName();
+    row << ifname << IfaceType2str(type()) << IfaceState2str(flags());
     pTopItem = new QTreeWidgetItem(row);
     pTreeWidget->addTopLevelItem(pTopItem);
 
@@ -127,5 +136,26 @@ void cInterface::getParams() {
             row << "Broadcast" << ip.broadcast().toString();
             addressItems.last()->addChild(new QTreeWidgetItem(row));
         }
+
+        row.clear();
+        row << "Route";
+        QTreeWidgetItem *pRouteItem = new QTreeWidgetItem(row);
+        addressItems.last()->addChild(pRouteItem);
+
+        static QString _Iface       = "Iface";
+        static QString _Destination = "Destination";
+        static QString _Gateway     = "Gateway";
+        static QString _Metric      = "Metric";
+        static QString _Mask        = "Mask";
+        for (int i = 0; i < routerTable.value(_Iface).size(); ++i) {
+            if (routerTable[_Iface][i] == ifname) {
+                row.clear();
+                row << hex2ipm(routerTable[_Destination][i], routerTable[_Mask][i])
+                    << hex2ip(routerTable[_Gateway][i])
+                    << routerTable[_Metric][i];
+                pRouteItem->addChild(new QTreeWidgetItem(row));
+            }
+        }
+
     }
 }
