@@ -10,12 +10,14 @@ CONFIG += c++17
 
 SOURCES += \
     cnmcli.cpp \
+    cping.cpp \
     main.cpp \
     mainwindow.cpp \
     proc_fs.cpp
 
 HEADERS += \
     cnmcli.h \
+    cping.h \
     mainwindow.h \
     proc_fs.h
 

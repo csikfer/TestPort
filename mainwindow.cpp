@@ -1,6 +1,9 @@
+
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "proc_fs.h"
+#include "cnmcli.h"
+#include "cping.h"
 
 static QString IfaceType2str(QNetworkInterface::InterfaceType _t)
 {
@@ -49,9 +52,8 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     ui->statusbar->showMessage(tr("Inicializálás"));
     ui->treeWidget->setColumnCount(3);
-    cTester *tester = new cTester(this);
-
-    tester->start();
+    pTester = nullptr;
+    pThread = nullptr;
 }
 
 MainWindow::~MainWindow()
@@ -59,9 +61,65 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::initTester()
+{
+    pTester = new cTester(this);
+    pThread = new QThread(this);
+    pTester->moveToThread(pThread);
+    connect(pThread, SIGNAL(started()), pTester, SLOT(process()));
+    connect(pTester, SIGNAL(ready()),   pThread, SLOT(quit()));
+    connect(pTester, SIGNAL(ready()),   pTester, SLOT(deleteLater()));
+    connect(pThread, SIGNAL(finished()),pThread, SLOT(deleteLater()));
+    emit pThread->start();
+}
+
+void MainWindow::onSlot(const QStringList& r, QObject* pSender)
+{
+    QStringList row = r;
+    QTreeWidgetItem *pTreeItem;
+    if (pSender->inherits("cPing")) {
+        cPing *pCPing = qobject_cast<cPing *>(pSender);
+        pTreeItem = pCPing->pTreeItem;
+        row.push_front("PING");
+    }
+    else {
+        return;
+    }
+    pTreeItem->addChild(new QTreeWidgetItem(row));
+    delete pSender;
+}
+
+void MainWindow::onError(QProcess::ProcessError e)
+{
+    QObject *pSender = sender();
+    QStringList row;
+    row << "Error" << QString::number((int)e);
+    onSlot(row, pSender);
+}
+
+void MainWindow::onFinished(int exitCode, QProcess::ExitStatus exitStatus)
+{
+    QObject *pSender = sender();
+    QStringList row;
+    if (exitStatus == QProcess::NormalExit) {
+        if (exitCode == 0) {
+            row << "On";
+        }
+        else {
+            row << "No";
+        }
+    }
+    else {
+        row << "Crash";
+    }
+    onSlot(row, pSender);
+}
+
+
+
 
 cTester::cTester(MainWindow *_mw)
-    : QThread()
+    : QObject()
     , pMainWindow(_mw)
 {
     ;
@@ -69,8 +127,11 @@ cTester::cTester(MainWindow *_mw)
 
 cTabFromProc routerTable;
 
-void cTester::run()
+void cTester::process()
 {
+    pLoop = new QEventLoop(this);
+    connect(thread(), SIGNAL(finished()), pLoop, SLOT(quit()));
+    DNSIsKnown = false;
     pMainWindow->ui->statusbar->showMessage(tr("router tábla"));
     if (!routerTable.load("/proc/net/route")) {
         pMainWindow->ui->statusbar->showMessage(tr("A router tábla beolvasása sikertelen"));
@@ -84,6 +145,8 @@ void cTester::run()
     }
     ;
     pMainWindow->ui->statusbar->showMessage(tr("Kész"));
+
+    pLoop->exec();
 }
 
 QList<cInterface *>   cInterface::interfaces;
@@ -99,7 +162,6 @@ cInterface::cInterface(const QNetworkInterface& i, cTester* par)
 
 
 void cInterface::getParams() {
-
     QStringList row;
     QString ifname = humanReadableName();
     row << ifname << IfaceType2str(type()) << IfaceState2str(flags());
@@ -142,24 +204,45 @@ void cInterface::getParams() {
     static QString _Iface       = "Iface";
     int routerTableSize = routerTable.value(_Iface).size();
     if (routerTableSize) {
+        QTreeWidgetItem *pRouteItem = nullptr;
         row.clear();
         row << "Route";
-        QTreeWidgetItem *pRouteItem = new QTreeWidgetItem(row);
-        pTopItem->addChild(pRouteItem);
         static QString _Destination = "Destination";
         static QString _Gateway     = "Gateway";
         static QString _Metric      = "Metric";
         static QString _Mask        = "Mask";
         for (int i = 0; i < routerTableSize; ++i) {
             if (routerTable[_Iface][i] == ifname) {
+                if (pRouteItem == nullptr) {
+                    pRouteItem = new QTreeWidgetItem(row);
+                    pTopItem->addChild(pRouteItem);
+                }
                 row.clear();
-                row << hex2ipm(routerTable[_Destination][i], routerTable[_Mask][i])
-                    << hex2ip(routerTable[_Gateway][i])
+                row << hex2ip(routerTable[_Gateway][i])
+                    << hex2ipm(routerTable[_Destination][i], routerTable[_Mask][i])
                     << routerTable[_Metric][i];
                 pRouteItem->addChild(new QTreeWidgetItem(row));
             }
         }
     }
     // DNS
+    cNmcli nmcli;
+    static const QString _sIp4_dns = "IP4.DNS";
+    QMap<QString, QStringList> mapIp4Dns = nmcli.getAndWait(ifname, _sIp4_dns);
+    QStringList nameservers = mapIp4Dns[_sIp4_dns];
+    if (!nameservers.isEmpty()) {
+        pParent->DNSIsKnown = true;
+        row.clear();
+        row << "DNS";
+        QTreeWidgetItem *pDnsItem = new QTreeWidgetItem(row);
+        pTopItem->addChild(pDnsItem);
+        for (QString& a: nameservers) {
+            row.clear();
+            row << a;
+            QTreeWidgetItem *ptwi = new QTreeWidgetItem(row);
+            pDnsItem->addChild(ptwi);
+            new cPing(ptwi, pParent->pMainWindow, pParent);
+        }
+    }
 
 }
